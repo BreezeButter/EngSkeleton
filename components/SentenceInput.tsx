@@ -15,9 +15,11 @@ import { Textarea, Button } from "@heroui/react";
 interface SentenceInputProps {
   /** Callback invoked with the trimmed sentence when the user clicks Parse. */
   onParse: (sentence: string) => void;
+  /** When true the parse button shows a loading spinner and is disabled. */
+  isLoading?: boolean;
 }
 
-export default function SentenceInput({ onParse }: SentenceInputProps) {
+export default function SentenceInput({ onParse, isLoading }: SentenceInputProps) {
   const [value, setValue] = useState("");
 
   /** Handle the parse action. */
@@ -43,7 +45,7 @@ export default function SentenceInput({ onParse }: SentenceInputProps) {
 
       <div className="flex gap-3">
         {/* Parse button */}
-        <Button color="primary" onPress={handleParse} isDisabled={!value.trim()}>
+        <Button color="primary" onPress={handleParse} isDisabled={!value.trim() || isLoading} isLoading={isLoading}>
           Parse Sentence
         </Button>
 
