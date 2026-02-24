@@ -1,27 +1,94 @@
-# EngSkeleton
+# English Sentence Parser
 
-## Configuration
+A **Next.js 14+** web application built with **HeroUI (NextUI v2)** and **TypeScript** that parses English sentences into grammatical components.
 
-The application uses the Google Gemini API. You need to provide an API key before running the app.
+## Features
 
-1. Copy the example environment file:
+- **Sentence Input** – Type or paste any English sentence.
+- **Grammatical Parsing** – Automatically extracts Subject (S), Verb (V), Object (O), Tense, Voice, and Phrases.
+- **Passive / Active Voice Highlighting** – Passive voice is visually distinguished with a red badge.
+- **Color-Coded Components** – Each grammatical component (S, V, O, Phrases) has its own color for quick scanning.
+- **Dual View** – Switch between **Card View** and **Table View** for parsed results.
+- **JSON Export** – Download all parsed results as a `.json` file.
 
-   ```bash
-   cp .env.example .env.local
-   ```
+## Project Structure
 
-2. Open `.env.local` and replace the placeholder with your actual Gemini API key:
+```
+├── app/                  # Next.js App Router pages & layouts
+│   ├── globals.css       # Global styles & Tailwind/HeroUI config
+│   ├── layout.tsx        # Root layout with HeroUI Provider
+│   └── page.tsx          # Home page (main UI)
+├── components/           # Reusable React components
+│   ├── ExportButton.tsx  # JSON export download button
+│   ├── ParsedResultCard.tsx  # Card-based result display
+│   ├── ParsedResultTable.tsx # Table-based result display
+│   ├── Providers.tsx     # HeroUI context provider wrapper
+│   └── SentenceInput.tsx # Sentence input textarea + parse button
+├── lib/                  # Helper / utility modules
+│   └── parseSentence.ts  # Heuristic English sentence parser
+├── public/               # Static assets
+├── next.config.ts        # Next.js configuration
+├── tsconfig.json         # TypeScript configuration
+├── package.json          # Dependencies & scripts
+└── README.md             # This file
+```
 
-   ```
-   GEMINI_API_KEY=your_gemini_api_key_here
-   ```
+## Getting Started
 
-   You can obtain an API key from <https://aistudio.google.com/apikey>.
+### Prerequisites
 
-3. The key is loaded at runtime via `lib/config.ts`:
+- **Node.js** 18+ and **npm** (or yarn/pnpm)
 
-   ```ts
-   import { getConfig } from "@/lib/config";
+### Installation
 
-   const { geminiApiKey } = getConfig();
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/BreezeButter/EngSkeleton.git
+cd EngSkeleton
+
+# Install dependencies
+npm install
+```
+
+### Running the Development Server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Building for Production
+
+```bash
+npm run build
+npm start
+```
+
+### Linting
+
+```bash
+npm run lint
+```
+
+## How It Works
+
+1. Enter an English sentence in the text area.
+2. Click **Parse Sentence**.
+3. The parser extracts:
+   - **Subject (S)** – words before the main verb
+   - **Verb (V)** – the verb phrase (including auxiliaries)
+   - **Object (O)** – words after the verb phrase
+   - **Tense** – detected tense (e.g., Present Simple, Past Perfect)
+   - **Voice** – Active or Passive (form of "be" + past participle)
+   - **Phrases** – prepositional/adverbial phrases
+4. Results appear in color-coded Card or Table view.
+5. Click **Export as JSON** to download results.
+
+## Technologies
+
+- [Next.js](https://nextjs.org/) – React framework with App Router
+- [HeroUI (NextUI v2)](https://heroui.com/) – Modern React component library
+- [Tailwind CSS](https://tailwindcss.com/) – Utility-first CSS framework
+- [TypeScript](https://www.typescriptlang.org/) – Type-safe JavaScript
+- [Framer Motion](https://www.framer.com/motion/) – Animation library (required by HeroUI)
