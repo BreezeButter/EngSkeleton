@@ -4,8 +4,8 @@
  * Home Page
  *
  * Main page of the English Sentence Parser application.
- * Users can input sentences, parse them, view results in card or table
- * layout, and export everything as JSON.
+ * Users can input sentences, parse them via the Gemini-powered API,
+ * view results in card or table layout, and export everything as JSON.
  */
 
 import React, { useState } from "react";
@@ -14,16 +14,37 @@ import SentenceInput from "@/components/SentenceInput";
 import ParsedResultCard from "@/components/ParsedResultCard";
 import ParsedResultTable from "@/components/ParsedResultTable";
 import ExportButton from "@/components/ExportButton";
-import { parseSentence, type ParsedSentence } from "@/lib/parseSentence";
+import type { ParsedSentence } from "@/lib/parseSentence";
 
 export default function Home() {
   /** Stores all parsed sentence results. */
   const [results, setResults] = useState<ParsedSentence[]>([]);
+  /** Indicates whether a parse request is in-flight. */
+  const [loading, setLoading] = useState(false);
+  /** Holds the latest error message, if any. */
+  const [error, setError] = useState<string | null>(null);
 
-  /** Parse a new sentence and prepend it to the results list. */
-  const handleParse = (sentence: string) => {
-    const parsed = parseSentence(sentence);
-    setResults((prev) => [parsed, ...prev]);
+  /** Parse a new sentence via the API and prepend it to the results list. */
+  const handleParse = async (sentence: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sentence }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Request failed (${res.status})`);
+      }
+      const parsed: ParsedSentence = await res.json();
+      setResults((prev) => [parsed, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,7 +61,12 @@ export default function Home() {
       </header>
 
       {/* Sentence input area */}
-      <SentenceInput onParse={handleParse} />
+      <SentenceInput onParse={handleParse} isLoading={loading} />
+
+      {/* Error message */}
+      {error && (
+        <p className="text-sm text-danger">{error}</p>
+      )}
 
       <Divider />
 
