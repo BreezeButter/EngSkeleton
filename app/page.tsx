@@ -4,8 +4,8 @@
  * Home Page
  *
  * Main page of the English Sentence Parser application.
- * Users can input sentences, parse them via the Gemini-powered API,
- * view results in card or table layout, and export everything as JSON.
+ * Users can input sentences or paragraphs, parse them via the Gemini-powered
+ * API, view results in card or table layout, and export everything as JSON.
  */
 
 import React, { useState } from "react";
@@ -24,7 +24,7 @@ export default function Home() {
   /** Holds the latest error message, if any. */
   const [error, setError] = useState<string | null>(null);
 
-  /** Parse a new sentence via the API and prepend it to the results list. */
+  /** Parse a single sentence via the API and prepend it to the results list. */
   const handleParse = async (sentence: string) => {
     setLoading(true);
     setError(null);
@@ -47,6 +47,29 @@ export default function Home() {
     }
   };
 
+  /** Parse a paragraph via the API: splits into sentences and prepends all results. */
+  const handleParseParagraph = async (paragraph: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/parseParagraph", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paragraph }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Request failed (${res.status})`);
+      }
+      const parsed: ParsedSentence[] = await res.json();
+      setResults((prev) => [...parsed, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-4 py-10 sm:px-8">
       {/* Header */}
@@ -55,13 +78,18 @@ export default function Home() {
           English Sentence Parser
         </h1>
         <p className="text-default-500">
-          Enter an English sentence to parse it into Subject, Verb, Object,
-          Tense, Voice, and Phrases.
+          Enter a sentence or a full paragraph to parse it into Subject, Verb,
+          Object, Tense, Voice, Phrases, word-level POS tags, and grammar
+          suggestions.
         </p>
       </header>
 
-      {/* Sentence input area */}
-      <SentenceInput onParse={handleParse} isLoading={loading} />
+      {/* Sentence / Paragraph input area */}
+      <SentenceInput
+        onParse={handleParse}
+        onParseParagraph={handleParseParagraph}
+        isLoading={loading}
+      />
 
       {/* Error message */}
       {error && (

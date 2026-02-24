@@ -18,8 +18,13 @@ const SYSTEM_PROMPT = `You are an expert English grammar analyzer. Given an Engl
   "object": "the object of the sentence, or empty string if none",
   "tense": "one of: Present Simple, Past Simple, Future Simple, Present Continuous, Past Continuous, Future Continuous, Present Perfect, Past Perfect, Future Perfect, Present Perfect Continuous, Past Perfect Continuous, Future Perfect Continuous",
   "voice": "Active or Passive",
-  "phrases": ["array of prepositional or adverbial phrases, empty array if none"]
-}`;
+  "phrases": ["array of prepositional or adverbial phrases, empty array if none"],
+  "wordTags": [{"word": "each", "pos": "DET"}, {"word": "token", "pos": "NOUN"}],
+  "grammarSuggestions": ["array of grammar suggestions or corrections, empty array if none"]
+}
+
+For wordTags, assign one of these POS labels to every token: NOUN, VERB, AUX, ADJ, ADV, DET, PRON, PREP, CONJ, NUM, PUNCT, OTHER.
+For grammarSuggestions, list any grammar issues found (subject-verb agreement, passive voice, punctuation, etc.) with recommended corrections.`;
 
 export async function POST(request: NextRequest) {
   let body: { sentence?: string };
@@ -70,6 +75,10 @@ export async function POST(request: NextRequest) {
         tense: parsed.tense ?? "Unknown",
         voice: parsed.voice === "Passive" ? "Passive" : "Active",
         phrases: Array.isArray(parsed.phrases) ? parsed.phrases : [],
+        wordTags: Array.isArray(parsed.wordTags) ? parsed.wordTags : [],
+        grammarSuggestions: Array.isArray(parsed.grammarSuggestions)
+          ? parsed.grammarSuggestions
+          : [],
       };
 
       return NextResponse.json(response);

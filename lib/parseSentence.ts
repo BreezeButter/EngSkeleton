@@ -9,6 +9,17 @@
  * lightweight and runnable out-of-the-box.
  */
 
+/** A single word with its part-of-speech label. */
+export interface WordTag {
+  /** The original word token. */
+  word: string;
+  /**
+   * Part-of-speech abbreviation:
+   * NOUN, VERB, AUX, ADJ, ADV, DET, PRON, PREP, CONJ, PUNCT, NUM, or OTHER.
+   */
+  pos: string;
+}
+
 /** Result type returned by the sentence parser. */
 export interface ParsedSentence {
   /** The original sentence that was parsed. */
@@ -25,6 +36,10 @@ export interface ParsedSentence {
   voice: "Active" | "Passive";
   /** Prepositional or adverbial phrases extracted from the sentence. */
   phrases: string[];
+  /** Per-word part-of-speech tags. */
+  wordTags: WordTag[];
+  /** Grammar suggestions and recommendations for the sentence. */
+  grammarSuggestions: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +77,64 @@ const AUXILIARIES = [
   "did",
   ...BE_FORMS,
 ];
+
+/** Determiners (articles, demonstratives, possessives, quantifiers). */
+const DETERMINERS = new Set([
+  "the", "a", "an", "this", "that", "these", "those",
+  "my", "your", "his", "her", "its", "our", "their",
+  "some", "any", "all", "both", "each", "every", "no", "another", "other",
+  "many", "much", "few", "little", "more", "most", "less", "least",
+  "several", "enough", "either", "neither",
+]);
+
+/** Personal, reflexive, relative, and interrogative pronouns. */
+const PRONOUNS = new Set([
+  "i", "me", "you", "he", "him", "she", "her", "it",
+  "we", "us", "they", "them", "who", "whom", "whose",
+  "which", "myself", "yourself", "himself", "herself",
+  "itself", "ourselves", "yourselves", "themselves",
+  "someone", "anyone", "everyone", "no one", "nobody",
+  "something", "anything", "everything", "nothing",
+  "somebody", "anybody", "everybody",
+]);
+
+/** Coordinating and subordinating conjunctions. */
+const CONJUNCTIONS = new Set([
+  "and", "but", "or", "nor", "for", "yet", "so",
+  "because", "although", "though", "while", "when", "if", "unless",
+  "until", "since", "as", "after", "before", "once", "whether",
+  "whereas", "wherever", "whenever", "however", "therefore",
+  "nevertheless", "nonetheless", "furthermore", "moreover",
+]);
+
+/** Common adverbs (non-derivational; -ly words are detected by suffix). */
+const ADVERBS = new Set([
+  "very", "quite", "rather", "just", "already", "still", "always",
+  "never", "often", "sometimes", "usually", "generally", "frequently",
+  "here", "there", "now", "then", "soon", "today", "yesterday",
+  "tomorrow", "not", "also", "too", "even", "only", "well", "almost",
+  "again", "away", "back", "far", "fast", "hard", "high", "late",
+  "long", "loud", "low", "more", "most", "much", "near", "next",
+  "once", "right", "still", "straight", "together",
+]);
+
+/** Adjective-like endings used for heuristic POS detection. */
+const ADJ_SUFFIXES = [
+  "ful", "ous", "ious", "eous", "ual", "ial", "ical",
+  "ic", "tic", "atic", "able", "ible", "ive", "ative",
+  "itive", "less", "like", "al", "an",
+  "ish", "esque", "ward",
+];
+
+/** Common number words. */
+const NUMBER_WORDS = new Set([
+  "zero", "one", "two", "three", "four", "five", "six", "seven",
+  "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+  "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+  "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+  "hundred", "thousand", "million", "billion", "first", "second",
+  "third", "fourth", "fifth",
+]);
 
 /** Prepositions that typically start prepositional phrases. */
 const PREPOSITIONS = [
@@ -365,6 +438,200 @@ function extractSVO(words: string[]): { subject: string; verb: string; object: s
 }
 
 // ---------------------------------------------------------------------------
+// Word-level POS tagging
+// ---------------------------------------------------------------------------
+
+/**
+ * Assigns a part-of-speech (POS) tag to each token in the sentence.
+ * Uses heuristic rules; works best for simple to moderately complex sentences.
+ *
+ * POS labels: DET, PRON, AUX, VERB, ADJ, ADV, PREP, CONJ, NUM, PUNCT, OTHER.
+ */
+export function tagWords(sentence: string): WordTag[] {
+  const tokens = sentence.trim().split(/\s+/);
+  const result: WordTag[] = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const raw = tokens[i];
+    // Strip trailing punctuation for classification, keep original word
+    const clean = raw.replace(/[^a-zA-Z0-9'-]/g, "");
+    const punct = raw.replace(/[a-zA-Z0-9'-]/g, "");
+    const lower = clean.toLowerCase();
+
+    // Push punctuation tokens separately when they stand alone
+    if (!clean) {
+      result.push({ word: raw, pos: "PUNCT" });
+      continue;
+    }
+
+    let pos: string;
+
+    // Pure numeric or ordinal
+    if (/^\d+$/.test(clean) || NUMBER_WORDS.has(lower)) {
+      pos = "NUM";
+    } else if (DETERMINERS.has(lower)) {
+      pos = "DET";
+    } else if (PRONOUNS.has(lower)) {
+      pos = "PRON";
+    } else if (AUXILIARIES.includes(lower)) {
+      pos = "AUX";
+    } else if (PREPOSITIONS.includes(lower)) {
+      pos = "PREP";
+    } else if (CONJUNCTIONS.has(lower)) {
+      pos = "CONJ";
+    } else if (ADVERBS.has(lower) || lower.endsWith("ly")) {
+      pos = "ADV";
+    } else if (ADJ_SUFFIXES.some((s) => lower.endsWith(s)) && lower.length > 3) {
+      // Heuristic: adjective suffixes; guard against matching short words
+      pos = "ADJ";
+    } else if (
+      lower.endsWith("ing") ||
+      lower.endsWith("ed") ||
+      lower.endsWith("en")
+    ) {
+      pos = "VERB";
+    } else {
+      // Default to NOUN
+      pos = "NOUN";
+    }
+
+    // If trailing punctuation exists, push token without it, then punctuation
+    if (punct) {
+      result.push({ word: clean, pos });
+      result.push({ word: punct, pos: "PUNCT" });
+    } else {
+      result.push({ word: raw, pos });
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Grammar checking
+// ---------------------------------------------------------------------------
+
+/**
+ * Performs lightweight grammar checks on a sentence and returns a list of
+ * human-readable suggestions.
+ */
+export function checkGrammar(
+  sentence: string,
+  voice: "Active" | "Passive",
+  wordCount: number,
+): string[] {
+  const suggestions: string[] = [];
+  const trimmed = sentence.trim();
+  const lower = trimmed.toLowerCase();
+  const words = trimmed.split(/\s+/).map((w) => w.toLowerCase().replace(/[^a-z]/g, ""));
+
+  // 1. Terminal punctuation
+  if (!/[.!?]$/.test(trimmed)) {
+    suggestions.push(
+      "Consider ending the sentence with proper punctuation (., !, or ?).",
+    );
+  }
+
+  // 2. Passive voice recommendation
+  if (voice === "Passive") {
+    suggestions.push(
+      "This sentence is in passive voice. Consider rewriting in active voice for clarity (e.g., 'The dog bit the man' instead of 'The man was bitten by the dog').",
+    );
+  }
+
+  // 3. Very long sentence
+  if (wordCount > 30) {
+    suggestions.push(
+      `This sentence is quite long (${wordCount} words). Consider breaking it into shorter sentences for readability.`,
+    );
+  }
+
+  // 4. Repeated consecutive words
+  for (let i = 0; i < words.length - 1; i++) {
+    if (words[i] && words[i] === words[i + 1]) {
+      suggestions.push(
+        `Possible duplicate word: "${words[i]} ${words[i + 1]}". Check for accidental repetition.`,
+      );
+      break;
+    }
+  }
+
+  // 5. Common subject-verb agreement issues
+  const svMismatches: [string, string, string][] = [
+    ["i", "are", "am"],
+    ["i", "is", "am"],
+    ["he", "are", "is"],
+    ["she", "are", "is"],
+    ["it", "are", "is"],
+    ["we", "is", "are"],
+    ["they", "is", "are"],
+    ["you", "is", "are"],
+    ["he", "have", "has"],
+    ["she", "have", "has"],
+    ["it", "have", "has"],
+    ["i", "has", "have"],
+    ["we", "has", "have"],
+    ["they", "has", "have"],
+    ["you", "has", "have"],
+  ];
+  for (const [subj, wrong, correct] of svMismatches) {
+    if (lower.includes(`${subj} ${wrong}`)) {
+      suggestions.push(
+        `Possible subject-verb agreement issue: "${subj} ${wrong}" should likely be "${subj} ${correct}".`,
+      );
+    }
+  }
+
+  // 6. Double negatives
+  const negPairs = [
+    ["not", "no"],
+    ["don't", "no"],
+    ["doesn't", "no"],
+    ["didn't", "no"],
+    ["never", "no"],
+    ["not", "nothing"],
+    ["don't", "nothing"],
+  ];
+  for (const [a, b] of negPairs) {
+    if (lower.includes(a) && lower.includes(b)) {
+      suggestions.push(
+        `Possible double negative detected ("${a}" and "${b}"). Double negatives can be confusing; consider revising.`,
+      );
+      break;
+    }
+  }
+
+  return suggestions;
+}
+
+// ---------------------------------------------------------------------------
+// Paragraph parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Splits a paragraph of text into individual sentences.
+ * Sentences are delimited by `.`, `!`, or `?` followed by whitespace or end
+ * of string.
+ */
+export function splitIntoSentences(paragraph: string): string[] {
+  // Split on sentence-ending punctuation while keeping the punctuation
+  const raw = paragraph.trim().match(/[^.!?]*[.!?]+[\s]*/g) ?? [paragraph.trim()];
+  return raw.map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+/**
+ * Parses every sentence in a paragraph and returns an array of
+ * `ParsedSentence` objects—one per detected sentence.
+ *
+ * @param paragraph - One or more sentences as a block of text.
+ * @returns Array of parsed sentences in order of appearance.
+ */
+export function parseParagraph(paragraph: string): ParsedSentence[] {
+  const sentences = splitIntoSentences(paragraph);
+  return sentences.map((s) => parseSentence(s));
+}
+
+// ---------------------------------------------------------------------------
 // Main parse function
 // ---------------------------------------------------------------------------
 
@@ -385,6 +652,8 @@ export function parseSentence(sentence: string): ParsedSentence {
       tense: "Unknown",
       voice: "Active",
       phrases: [],
+      wordTags: [],
+      grammarSuggestions: [],
     };
   }
 
@@ -399,6 +668,10 @@ export function parseSentence(sentence: string): ParsedSentence {
   const { phrases, remaining } = extractPhrases(words);
   const { subject, verb, object } = extractSVO(remaining);
 
+  // Per-word POS tagging and grammar checking
+  const wordTags = tagWords(trimmed);
+  const grammarSuggestions = checkGrammar(trimmed, voice, words.length);
+
   return {
     original: trimmed,
     subject,
@@ -407,5 +680,7 @@ export function parseSentence(sentence: string): ParsedSentence {
     tense,
     voice,
     phrases,
+    wordTags,
+    grammarSuggestions,
   };
 }
